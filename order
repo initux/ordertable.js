@@ -1,0 +1,1485 @@
+import DateFnsUtils from "@date-io/date-fns";
+import {
+  ButtonGroup,
+  Chip,
+  CircularProgress,
+  Container,
+  IconButton,
+  LinearProgress,
+  Switch,
+  TextField,
+  Typography,
+} from "@material-ui/core";
+import { Modal, ModalHeader, ModalBody, ModalFooter } from "reactstrap";
+import Button from "@material-ui/core/Button";
+import { blue } from "@material-ui/core/colors";
+import MenuItem from "@material-ui/core/MenuItem";
+import Paper from "@material-ui/core/Paper";
+import { makeStyles } from "@material-ui/core/styles";
+import Table from "@material-ui/core/Table";
+import TableBody from "@material-ui/core/TableBody";
+import TableCell from "@material-ui/core/TableCell";
+import TableContainer from "@material-ui/core/TableContainer";
+import TableHead from "@material-ui/core/TableHead";
+import TablePagination from "@material-ui/core/TablePagination";
+import TableRow from "@material-ui/core/TableRow";
+import AddIcon from "@material-ui/icons/Add";
+import RefreshIcon from "@material-ui/icons/Refresh";
+import SearchIcon from "@material-ui/icons/Search";
+import { Autocomplete } from "@material-ui/lab";
+import {
+  KeyboardDatePicker,
+  MuiPickersUtilsProvider,
+} from "@material-ui/pickers";
+import axios from "axios";
+import "date-fns";
+import { format } from "date-fns";
+import React, { Fragment, useEffect, useRef, useState } from "react";
+import { connect } from "react-redux";
+import { useHistory } from "react-router-dom";
+import { useReactToPrint } from "react-to-print";
+import { Input, InputGroup } from "reactstrap";
+import SnackBar from "../common/SnackBar";
+import CallOrder from "./Call_order";
+import DetailsOrder from "./Details_order_temp";
+import Invoice from "./Invoice";
+import "./Order.css";
+import UpdateOrder from "./Update_order";
+import EditOrderInfo from "./EditOrderInfo";
+import { Link } from "react-router-dom";
+import { toast } from "react-toastify";
+import { ToastContainer } from "react-toastify";
+const ORDER_STATUS = [
+  { id: 0, name: "All" },
+  { id: 7, name: "Confirm" },
+  { id: 1, name: "Pending" },
+ 
+  { id: 2, name: "Processing" },
+  { id: 4, name: "Delivered" },
+  { id: 3, name: "Paid" },
+  { id: 5, name: "Cancel" },
+  { id: 6, name: "Return" },
+];
+
+const ORDER_TYPE = {
+  1: "Manual",
+  2: "Web",
+  3: "POS",
+};
+
+const ORDER_TYPES = [
+  {
+    id: 0,
+    name: "All",
+  },
+  {
+    id: 1,
+    name: "Manual",
+  },
+  {
+    id: 2,
+    name: "Web",
+  },
+  {
+    id: 3,
+    name: "POS",
+  },
+];
+
+const columns = [
+  // { id: 'sl', label: 'SL', minWidth: 10,  maxWidth:10,align: 'center',  },
+  // { id: 'invoice_id', label: 'Invoice', minWidth: 20,  maxWidth:30,align: 'center',  },
+  { id: "order_date", label: "Date", align: "left" },
+  //{ id: 'invoice_id', label: 'Invoice', minWidth: 20,  maxWidth:30,align: 'center',  },
+  // { id: 'received_time', label: 'recieve', minWidth: 20 ,  maxWidth:30,align: 'left',  },
+  { id: "receiver_name", label: "Customer details", align: "left" },
+  { id: "products", label: "Products", align: "left" },
+  { id: "sizeandcolor", label: "Size/Color", align: "left" },
+  { id: "total_bill", label: "Bill Details", align: "left" },
+  { id: "order_status_data", label: "Status", align: "left" },
+  // {
+  //   id: "order_type",
+  //   label: "Type",
+  //   minWidth: 10,
+  //   maxWidth: 10,
+  //   align: "left",
+  // },
+  // { id: 'total_payment', label: 'paid', minWidth: 10 , maxWidth:10},
+  // { id: 'total_due', label: 'due', minWidth: 10 , maxWidth:10},
+  {
+    id: "courier_booked",
+    label: "Booked",
+  },
+  {
+    id: "action",
+    label: "Action",
+    minWidth: 10,
+    // maxWidth:80,
+    align: "left",
+  },
+];
+
+const useStyles = makeStyles({
+  root: {
+    width: "100%",
+    // minWidth:"400px"
+  },
+  container: {
+    maxHeight: "auto",
+  },
+  tableAction: {
+    width: 100,
+  },
+
+  tableActionButton: {
+    width: "100%",
+  },
+});
+
+const statusStyle = (status) => {
+  let style = {
+    padding: 5,
+    border: "1px solid ",
+    borderRadius: 5,
+    color: "blue",
+    fontSize: "14px",
+  };
+  let color = "red";
+  switch (status) {
+    case 1:
+      color = blue[400];
+      break;
+    case 2:
+      color = "blue";
+      break;
+    case 3:
+      color = "green";
+      break;
+    case 4:
+      color = "green";
+      break;
+    case 5:
+      color = "red";
+      break;
+    case 6:
+      color = "red";
+      break;
+    default:
+      break;
+  }
+
+  style.color = color;
+  style.border += color;
+  return style;
+};
+
+const DataInfo = ({ data }) => {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        alignItems: "flex-start",
+        gap: 5,
+        padding: 10,
+      }}
+    >
+      {data.map((item, index) => (
+        <span
+          style={{ fontSize: "14px" }}
+          key={"data_info_" + Math.random(1) + index}
+        >
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+};
+const OrderTable = (props) => {
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: "Bearer " + props.token,
+  };
+   const adminRole = localStorage.getItem("adminRole");
+
+  const classes = useStyles();
+  const history = useHistory();
+
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+
+  const [updateModal, setUpdateModal] = useState(false);
+  const [EditOrderModal, setEditOrderModal] = useState(false);
+  const [callModal, setCallModal] = useState(false);
+  const [detailsModal, setDetailsModal] = useState(false);
+
+  const [orderId, setOrderId] = useState();
+  const [order, setOrder] = useState({});
+
+  const [search, setSearch] = useState("");
+
+  const [orders, setOrders] = useState([]);
+  const [order_status, setOrderStatus] = useState([]);
+  const [spinner, setSpinner] = useState(false);
+  const [rows, setRows] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(props.date || null);
+  const [order_status_filter, setOrderStatusFilter] = useState(
+    ORDER_STATUS[0].id
+  );
+  const [orderTypeFilter, setOrderTypeFilter] = useState(ORDER_TYPES[0].id);
+  const [courier, setCourier] = useState(null);
+  const [courierFilter, setCourierFilter] = useState("All");
+  const [salesAccFilter, setSalesAccFilter] = useState(null);
+  const [salesAdmin, setSalesAdmin] = useState(null);
+
+  console.log("selected courier id ", courierFilter);
+
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+  // console.log("salse : :: ", salesAccFilter);
+
+  const [openSalesAuto, setOpenSalesAuto] = useState(false);
+  const [salesAccOptions, setSalesAccOptions] = useState([]);
+
+  const [redx, setRedx] = useState({});
+  const [redxToken, setRedxToken] = useState("");
+  const [redxModel, setRedxModel] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [redxOtp, setRedxOtp] = useState("");
+  const [redxAlive, setRedxAlive] = useState([]);
+  const [steadfastAlive, setSteadfastAlive] = useState([]);
+  const [redxNotFoundMessage, setRedxNotFoundMessage] = useState(false);
+
+  const [steadfastModel, setSteadfastModel] = useState(false);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
+
+
+
+  const salesAccOptionsLoading = openSalesAuto && salesAccOptions.length === 0;
+
+  const invoiceComponentRef = useRef();
+
+  // console.log(" orders : ", orders);
+
+  const updateHandler = () => {
+    setUpdateModal(false);
+  };
+
+  const EditOrderHandler = () => {
+    setEditOrderModal(false);
+  };
+
+  const callHandler = () => {
+    setCallModal(false);
+  };
+  const detailsHandler = () => {
+    setDetailsModal(false);
+  };
+  const searchHandler = () => {
+    getOrders(search);
+  };
+
+  const handleDateChange = (date) => {
+    if (date === "Invalid Date") {
+      return;
+    }
+    setSelectedDate(date);
+  };
+  const fetchPlugin = async () => {
+    console.log("fatching plugin");
+    console.log("header ", headers);
+
+    try {
+      const response = await axios.get(
+        process.env.REACT_APP_BASE_URL + "admin_api/plugin/install",
+        {
+          headers: headers,
+        }
+      );
+      // setInstalledPlugin(response.data.plugin);
+      console.log("ali all plugin", response.data.plugin);
+      const redxData = response.data.plugin.filter((plugin) => {
+        if (plugin.prefix === "redx" && plugin.status === true) return plugin;
+      });
+      if (redxData) setRedxAlive(redxData);
+      console.log("redx", redxData);
+
+
+      const steadfastData = response.data.plugin.filter((plugin) => {
+        if (plugin.prefix === "steadfast" && plugin.status === true) return plugin;
+      });
+
+      if (steadfastData) setSteadfastAlive(steadfastData);
+    }
+    catch (err) {
+      
+    }
+  };
+  const fetchRedx = () => {
+    console.log("fatching redx")
+    try {
+        axios
+          .get(process.env.REACT_APP_BASE_URL + "admin_api/redx", {
+            headers: headers,
+          })
+          .then((res) => {
+            if (res.data.error === false) {
+              console.log("red x x ", res.data);
+              // console.log(res.data.redx.token);
+              setRedx(res.data.redx);
+              setRedxToken(res.data.redx.token);
+            } else {
+              setRedxNotFoundMessage(true);
+            }
+          });
+      
+    }
+    catch (err) {
+      
+    }
+  };
+  const getCourier = () => {
+    console.log("fatching redx");
+    try {
+      axios
+        .get(process.env.REACT_APP_BASE_URL + "admin_api/courier/all", {
+          headers: headers,
+        })
+        .then((res) => {
+          if (res.data.error === false) {
+            console.log("courier ", res.data);
+            // console.log(res.data.redx.token);
+            setCourier(res.data.couriers);
+            // setRedxToken(res.data.redx.token);
+          } else {
+            setRedxNotFoundMessage(true);
+          }
+        });
+    } catch (err) {}
+  };
+  useEffect(() => {
+    fetchPlugin();
+    fetchRedx();
+    getOrders();
+    getCourier();
+  }, [selectedDate, order_status_filter, orderTypeFilter, courierFilter]);
+
+  useEffect(() => {
+    getOrders();
+  }, [salesAccFilter]);
+
+  useEffect(() => {
+    let value = search.trim();
+    if (value.length >= 3) {
+      getOrders(value);
+    }
+  }, [search]);
+
+  // useEffect(() => {
+  //   axios
+  //     .get(process.env.REACT_APP_BASE_URL + "admin_api/redx", {
+  //       headers: headers,
+  //     })
+  //     .then((res) => {
+  //       if (res.data.error === false) {
+  //         // console.log(res.data);
+  //         // console.log(res.data.redx.token);
+  //         setRedx(res.data.redx);
+  //         setRedxToken(res.data.redx.token);
+  //       } else {
+  //         //  alert(res.data.message);
+  //       }
+  //     });
+  // }, []);
+
+  const handleRedx = (number) => {
+
+ 
+    console.log("Redx  token : ", redxToken);
+    // console.log("headers  token : ", headers);
+    if (redxNotFoundMessage) {
+      toast.info("First Configure Your Redx Plugin", {
+        position: toast.POSITION.TOP_RIGHT,
+      });
+      return;
+    }
+    if (redxToken) {
+      // if (1>0) {
+      console.log("token found ", redxToken);
+      history.push(`/redx/parcel-list/${number}`);
+    } else {
+      console.log("calling for token ");
+      axios
+        .post(
+          process.env.REACT_APP_BASE_URL + "admin_api/redx/login",
+          {},
+          {
+            headers: headers,
+          }
+        )
+        .then((res) => {
+          console.log(res.data);
+          if (res.data.error === true) {
+            console.log(res.data.body.message);
+            toast.error(res.data.body.message + " https://redx.com.bd/", {
+              position: toast.POSITION.TOP_RIGHT,
+            });
+          } else if (res.data.error === false) {
+            console.log(res.data.body.messages);
+            setModalMessage(res.data.body.messages);
+            setRedxModel(true);
+          } else {
+            //  alert(res.data.message);
+          }
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    }
+  };
+
+
+  const SteadfastHandleClose = () => {
+    setSteadfastModel(false);
+  };
+
+
+  const handleSteadfast = (data) => {
+    //setSelectedInvoiceId(data.invoice_id);
+    setSteadfastModel(true);
+  };
+
+  const handleAddParcel = (orderId) => {
+    // Make the API call to add the parcel using the order ID
+    axios
+      .post(
+        process.env.REACT_APP_BASE_URL + "admin_api/steadfast/addparcel",
+        { order_id: orderId },
+        {
+          headers: headers,
+        }
+      )
+      .then((res) => {
+        toast.success(res.data.message, {
+          position: toast.POSITION.TOP_RIGHT,
+        });
+      })
+      .catch((err) => {
+        toast.error(err.response.data.message, {
+          position: toast.POSITION.TOP_RIGHT,
+        });
+      });
+  };
+  
+  
+
+  // Define a new function to handle the "Add Parcel" button click
+  // const handleAddParcel = (invoiceId) => {
+  //   // Make the API call to add the parcel using the invoice ID
+  //   axios
+  //     .post(
+  //       process.env.REACT_APP_BASE_URL + "admin_api/steadfast/addparcel",
+  //       { order_id: invoiceId },
+  //       {
+  //         headers: headers,
+  //       }
+  //     )
+  //     .then((res) => {
+  //       // Check if the API call was successful
+  //       if (res.status === 200) {
+  //         // Handle the successful response
+  //         console.log(res.data); // Modify this to handle the response as needed
+  //       } else {
+  //         // Handle other response statuses if necessary
+  //         console.error("Failed to add parcel:", res.data.message);
+  //       }
+  //     })
+  //     .catch((err) => {
+  //       // Handle errors
+  //       console.error("Error adding parcel:", err.message);
+  //     });
+  // };
+  
+
+
+
+   const handleRedxWithoutAdmin = (number) => {
+     history.push(`/redx/parcel-list/${number}`);
+   };
+
+  const handleRedxOtp = () => {
+    if (redxOtp.length === 4) {
+      axios
+        .post(
+          process.env.REACT_APP_BASE_URL + "admin_api/redx/login/otp",
+          { otp: redxOtp },
+          {
+            headers: headers,
+          }
+        )
+        .then((res) => {
+          console.log(res.data);
+          if (res.data.error === true) {
+            // console.log(res.data.body.message);
+          } else if (res.data.error === false) {
+            // console.log(res.data.body.messages);
+            // setModalMessage(res.data.body.messages);
+            setRedxModel(false);
+          } else {
+            //  alert(res.data.message);
+          }
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    } else {
+      alert("Otp will be 4 digit");
+    }
+  };
+
+  const handleInvoicePrint = useReactToPrint({
+    content: () => invoiceComponentRef.current,
+    documentTitle: "Invoice_" + order?.invoice_id,
+  });
+  const handlePrintCount = async (id) => {
+    const result = await axios.patch(
+      process.env.REACT_APP_BASE_URL +
+        "admin_api/order/update/print_count/" +
+      id,
+        {},
+      { headers: headers }
+    );
+    getOrders();
+    
+  }
+
+  const getSubAdminProfile = async () => {
+    try {
+      const result = await axios.get(
+        process.env.REACT_APP_BASE_URL + "admin_api/subadmin/profile",
+        { headers: headers }
+      );
+      setSalesAccFilter(result.data.profile);
+      setSalesAdmin(result.data.profile);
+      // console.log("sub profile", result.data.profile);
+    } catch (error) {
+      let message = error.response?.data?.message || error.message;
+      setSnackbar({
+        open: true,
+        message: message,
+        severity: "error",
+      });
+    }
+  };
+
+  useEffect(() => {
+    const role = props.adminRole;
+    if (role !== "admin") {
+      getSubAdminProfile();
+    }
+  }, [props.adminRole, salesAccOptions]);
+
+  const updateCourierBooked = async (id, value) => {
+    try {
+      setSnackbar({
+        open: true,
+        message: "Updating...",
+        severity: "info",
+      });
+      const inputData = {
+        courier_booked: value,
+      };
+      const result = await axios.patch(
+        process.env.REACT_APP_BASE_URL +
+          "admin_api/order/update/courier_booked/" +
+          id,
+        inputData,
+        { headers: headers }
+      );
+      setSnackbar({
+        open: true,
+        message: result.data.message,
+        severity: "success",
+      });
+      getOrders();
+    } catch (error) {
+      let message = error.response?.data?.message || error.message;
+      setSnackbar({
+        open: true,
+        message: message,
+        severity: "error",
+      });
+    }
+  };
+
+  const handleCourierBooked = (e, order) => {
+    let value = e.target.checked;
+    updateCourierBooked(order._id, value);
+  };
+
+  const getOrders = async (query) => {
+    try {
+      setSpinner(true);
+      let route = "admin_api/order/all";
+      let type = "orders";
+      if (props.type === "pos") {
+        type = "pos";
+      }
+      route = "admin_api/order/all?type=" + type;
+      if (props.readonly) {
+        route += `&max=${props.maxRow}`;
+      }
+      if (query) {
+        route += `&search=${query}`;
+      }
+
+      if (selectedDate) {
+        route += "&date=" + format(selectedDate, "yyyy-MM-dd");
+      }
+      if (props?.search) {
+        route += `&${props.search}`;
+      }
+      if (order_status_filter !== 0 && order_status_filter < 7) {
+        route += `&order_status=${order_status_filter}`;
+      }
+      if (orderTypeFilter !== 0) {
+        route += `&order_type=${orderTypeFilter}`;
+      }
+      if (salesAccFilter) {
+        route += `&agent_id=${salesAccFilter._id}`;
+      }
+      if (courierFilter && courierFilter !== "All") {
+        route += `&courier_id=${courierFilter}`;
+      }
+      const result = await axios.get(process.env.REACT_APP_BASE_URL + route, {
+        headers: headers,
+      });
+      setOrders(result.data.orders);
+      setOrderStatus(result.data.order_status);
+
+      setSpinner(false);
+    } catch (error) {
+      let message = error.response?.data?.message || error.message;
+      setSpinner(false);
+      setSnackbar({
+        open: true,
+        message: message,
+        severity: "error",
+      });
+    }
+  };
+
+  const createData = (data) => {
+    let date = "N/A";
+    if (data.order_date) {
+      date = new Date(data.order_date).toLocaleDateString();
+      if (date === "Invalid Date") {
+        date = "N/A";
+      }
+    }
+    const index =
+      order_status &&
+      order_status.findIndex((status) => status.id === data.order_status);
+
+    const order_status_data = (
+      <span style={statusStyle(order_status[index].id)}>
+        {order_status[index].name}
+      </span>
+    );
+
+    const invoice_id = (
+      <span style={{ fontSize: "14px" }}>{data.invoice_id}</span>
+    );
+
+    const order_date = (
+      <span style={{ fontSize: "124x", marginLeft: 10 }}>{date}</span>
+    );
+    // const received_time = <span style={{fontSize:"124x"}}>{ data.received_time? data.received_time  : "N/A"} </span>
+    const products = (
+      <span style={{ fontSize: "14px", marginLeft: 10 }}>
+        {data.products_list.map((prod, i) => {
+          return (
+            <>
+              <p style={{ marginRight: 2 }} key={prod._id}>
+                {prod.product_code}{" "}
+                {/* {prod.product_size ? <span>({prod.product_size})</span> : ""} */}
+                {i !== data.products_list.length - 1 && ", "}
+              </p>
+
+              {/* <br /> */}
+            </>
+          );
+        })}{" "}
+      </span>
+    );
+    const sizeandcolor = (
+      <span style={{ fontSize: "14px", marginLeft: 10 }}>
+        {data.products_list.map((prod, i) => {
+          return (
+            <>
+              <p style={{ marginRight: 2 }} key={prod._id}>
+                {/* {prod.product_code}{" "} */}
+                {prod.product_size ? <span>{prod.product_size}</span> : "--"} /
+                {prod.product_color ? <span>{prod.product_color}</span> : "--"}
+                {i !== data.products_list.length - 1 && ", "}
+              </p>
+
+              {/* <br /> */}
+            </>
+          );
+        })}{" "}
+      </span>
+    );
+
+    const receiver_name =
+      data.order_type !== 3 ? (
+        <DataInfo
+          data={[
+            data.receiver_name || "",
+            data.receiver_phone || "",
+            data.receiver_location || "",
+            
+            `Courier : ${data?.courier_id?.name || "N/A"}`,
+            `Shop : ${data?.shop_id?.name || "N/A"}`,
+            `Order ID : ${data?.invoice_id || "N/A"}`,
+            
+          ]}
+        />
+      ) : (
+        <Typography>Phone : {data.receiver_phone || "N/A"}</Typography>
+      );
+    const total_bill = (
+      <DataInfo
+        data={[
+          <Chip
+            size="small"
+            variant="outlined"
+            label={
+              data.total_bill
+                ? `Bill : ${props.admin?.setting?.currency} ` +
+                  data.total_bill.toFixed(2)
+                : `Total Bill :${props.admin?.setting?.currency} 0.00`
+            }
+          />,
+          <Chip
+            size="small"
+            color="primary"
+            variant="outlined"
+            label={
+              data.total_payment
+                ? `Payment : ${props.admin?.setting?.currency} ` +
+                  data.total_payment.toFixed(2)
+                : `Total Payment : x${props.admin?.setting?.currency}`
+            }
+          />,
+          <Chip
+            size="small"
+            color={data?.total_due > 0 ? "secondary" : "default"}
+            style={{
+              color: data?.total_due > 0 ? "red" : "green",
+            }}
+            variant="outlined"
+            label={
+              data.total_due
+                ? `Due : ${props.admin?.setting?.currency} ` +
+                  data.total_due.toFixed(2)
+                : `Total Due : ${props.admin?.setting?.currency} 0.00`
+            }
+          />,
+        ]}
+      />
+    );
+    // const total_payment = data.total_payment? "$"+data.total_payment : "$0"
+    // const total_due = data.total_due? "$"+data.total_due : "$0"
+    const order_type = (
+      <span style={{ fontSize: "14px" }}>
+        {data.order_type ? ORDER_TYPE[data.order_type] : ""}{" "}
+      </span>
+    );
+    // const action =  <span >
+    //                     <IconButton aria-controls="simple-menu" aria-haspopup="true"  onClick={(e)=>{setOrderId(data._id);handleClick(e);setOrder(data)}}><MoreHorizIcon style={{color:"grey"}}/></IconButton>
+    //                 </span>
+    const courier_booked = (
+      <Switch
+        checked={!!data?.courier_booked}
+        onClick={(e) => handleCourierBooked(e, data)}
+      />
+    );
+    const action = (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 1,
+          marginRight: 5,
+        }}
+      >
+        <ButtonGroup variant="contained" disableElevation color="primary">
+          {
+            <Button
+            disabled={data?.order_status === 3 || data?.order_status === 5}
+              //disabled={(data?order_status === 3 || data?order_status === 5)}
+              onClick={() => {
+                handleActionClick(data);
+                setUpdateModal(true);
+              }}
+              className={classes.tableAction}
+              style={{ backgroundColor: "#65A03C" }}
+            >
+              {" "}
+              Update
+            </Button>
+          }
+
+
+          {
+                        <Button
+              onClick={() => {
+                handleActionClick(data);
+                setEditOrderModal(true);
+              }}
+              className={classes.tableAction}
+              style={{ backgroundColor: "#3dba6b" }}
+            >
+              Edit
+            </Button>
+
+          }
+
+
+        </ButtonGroup>
+        <ButtonGroup
+          style={{ width: "100%" }}
+          variant="contained"
+          disableElevation
+          color="primary"
+        >
+          <Button
+            disabled={data?.order_status >= 5}
+            onClick={() => {
+              handleActionClick(data);
+              handleInvoicePrint();
+              handlePrintCount(data._id);
+            }}
+            style={{ backgroundColor: "#4071CA" }}
+            className={classes.tableAction}
+          >
+            Print
+            {data?.order_print_count !== 0 && (
+              <span
+              // style={{
+              //   backgroundColor: "red",
+              //   color: "white",
+              //   borderRadius: "10%",
+              //   padding: "2px",
+              // }}
+              >
+                ({data?.order_print_count})
+              </span>
+            )}
+          </Button>
+
+          <Button
+            onClick={() => history.push("/order/details/" + data._id)}
+            style={{ backgroundColor: "#E5B202" }}
+          >
+            View
+          </Button>
+
+          {
+            // data.invoice_id === "0" ? (
+            data.invoice_id === "0" &&
+            <Button
+              onClick={() => {
+                history.push(`/invoice/${data.order_id}`);
+                // setCallModal(true)
+              }}
+              disabled={data.invoice_id === "0" ? false : true}
+              style={{ backgroundColor: "#EE7320" }}
+            >
+              Invoice
+            </Button>
+          }
+              {/* <Button
+                // onClick={() => {
+                //   handleActionClick(data);
+                //   setCallModal(true);
+                // }}
+                onClick={() => {
+                  history.push(`/update-order/${data._id}`);
+                  // setCallModal(true)
+                }}
+                style={{ backgroundColor: "#EE7320" }}
+              >
+                Edit Order
+              </Button> */}
+           
+        </ButtonGroup>
+        <ButtonGroup
+          style={{ width: "100%" }}
+          variant="contained"
+          disableElevation
+          color="primary"
+        >
+          {redxAlive.length !== 0 && (
+            <div>
+              {adminRole === "admin" ? (
+                <Button
+                  onClick={() => handleRedx(data.receiver_phone)}
+                  style={{ backgroundColor: "#4071CA", color: "white" }}
+                  className={classes.tableAction}
+                >
+                  Redx
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => handleRedxWithoutAdmin(data.receiver_phone)}
+                  style={{ backgroundColor: "#4071CA", color: "white" }}
+                  className={classes.tableAction}
+                >
+                  Redx
+                </Button>
+              )}
+            </div>
+          )}
+
+{steadfastAlive.length !== 0 && (
+            <div>
+              {adminRole === "admin" ? (
+                // <Button
+                //   onClick={() => handleSteadfast(data.receiver_phone)}
+                //   style={{ backgroundColor: "#4071CA", color: "white" }}
+                //   className={classes.tableAction}
+                // >
+                //   Steadfast
+                // </Button>
+                <Button
+  onClick={() => handleAddParcel(data.order_id)} // Pass the specific order ID
+  style={{ backgroundColor: "#4071CA", color: "white" }}
+  className={classes.tableActionButton}
+>
+  Add Parcel
+</Button>
+
+              ) : (
+                <Button
+                  onClick={() => handleRedxWithoutAdmin(data.receiver_phone)}
+                  style={{ backgroundColor: "#4071CA", color: "white" }}
+                  className={classes.tableActionButton}
+                >
+                  Steadfast
+                </Button>
+              )}
+            </div>
+          )}
+
+        </ButtonGroup>
+
+
+      </div>
+    );
+
+    return {
+      sl: data.key,
+       courier_booked,
+      invoice_id,
+      order_date,
+      receiver_name,
+      order_status_data,
+      products,
+      sizeandcolor,
+      total_bill,
+      order_type,
+      action,
+    };
+  };
+
+  const onOrderUpdateSuccess = (data, index) => {
+    if (index - 1 < 0 || index - 1 >= orders.length) {
+      return;
+    }
+    let newRows = [...rows];
+    newRows[index - 1] = createData({ ...data, key: index });
+    setRows(newRows);
+  };
+
+  useEffect(() => {
+    if (order_status.length > 0) {
+      const tmps = [];
+      orders.map((data, index) => {
+        return (
+          <div key={index}>
+            {data && tmps.push(createData({ ...data, key: index + 1 }))}
+          </div>
+        );
+      });
+      setRows(tmps);
+    }
+  }, [orders, order_status]);
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(+event.target.value);
+    setPage(0);
+  };
+
+  let createOrder = (
+    <Link
+      to="/create_order"
+      variant="contained"
+      color="primary"
+      style={{ height: 40 }}
+      // onClick={() => history.push("/create_order")}
+    >
+      <div
+        style={{
+          backgroundColor: "green",
+          padding: "8px 12px",
+          borderRadius: "5px",
+        }}
+      >
+        <AddIcon style={{ color: "white" }} />
+      </div>
+    </Link>
+  );
+  if (props.readonly || props.search) {
+    createOrder = null;
+  }
+
+  const fetchSalesAdmins = async () => {
+    try {
+      const result = await axios.get(
+        process.env.REACT_APP_BASE_URL + "admin_api/subadmin/all?role=sales",
+        { headers: headers }
+      );
+      setSalesAccOptions(result.data.subAdmins);
+    } catch (error) {
+      let message = error.response?.data?.message || error.message;
+      setSnackbar({
+        open: true,
+        message: message,
+        severity: "error",
+      });
+    }
+  };
+
+  const handleActionClick = (data) => {
+    setOrderId(data._id);
+    setOrder(data);
+  };
+
+  const handleRefreshIcon = () => {
+    getOrders();
+  };
+
+  useEffect(() => {
+    if (!salesAccOptionsLoading) {
+      return;
+    }
+    fetchSalesAdmins();
+  }, [salesAccOptionsLoading]);
+
+  return (
+    <Container>
+      <div
+        style={{
+          display: "flex",
+          marginTop: "20px",
+          flexFlow: "row-reverse",
+        }}
+      >
+        {/* <Button
+            variant="text"
+            color="primary"
+            onClick={handleRefreshIcon}
+            style={{
+              textTransform: "none",
+              fontSize: "15px",
+              textTransform: "none",
+            }}
+          >
+            {" "}
+            Refresh
+          </Button> */}
+        <br />
+        {
+          <IconButton>
+            <RefreshIcon onClick={handleRefreshIcon} />
+          </IconButton>
+        }
+        {createOrder}
+        {!props.readonly && (
+          <InputGroup
+            style={{ width: "240px", height: 30, marginRight: "15px" }}
+          >
+            <Input
+              type="text"
+              name="search"
+              onChange={(e) => setSearch(e.target.value)}
+              value={search}
+              style={{ fontSize: "20px" }}
+              placeholder="search"
+            />
+
+            <Button
+              style={{ backgroundColor: blue[500] }}
+              onClick={searchHandler}
+            >
+              <SearchIcon style={{ cursor: "pointer" }} />
+            </Button>
+          </InputGroup>
+        )}
+        <MuiPickersUtilsProvider utils={DateFnsUtils}>
+          <KeyboardDatePicker
+            style={{ marginRight: 20, fontSize: 14 }}
+            variant="outline"
+            format="MM/dd/yyyy"
+            id="date-picker-inline"
+            label="Search By Order-Date"
+            value={selectedDate}
+            onChange={handleDateChange}
+            KeyboardButtonProps={{
+              "aria-label": "change date",
+            }}
+          />
+        </MuiPickersUtilsProvider>
+
+        {!props.readonly && (
+          <TextField
+            select
+            size="small"
+            label="Type"
+            value={orderTypeFilter}
+            onChange={(e) => setOrderTypeFilter(e.target.value)}
+            variant="outlined"
+            style={{
+              width: "100px",
+              marginRight: "15px",
+              fontSize: "15px",
+              padding: 0,
+              marginTop: 10,
+            }}
+          >
+            {ORDER_TYPES.map((option) => (
+              <MenuItem key={option.id} value={option.id}>
+                {option.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+
+        {!props.readonly && (
+          <TextField
+            select
+            size="small"
+            label="Status"
+            value={order_status_filter}
+            onChange={(e) => setOrderStatusFilter(e.target.value)}
+            variant="outlined"
+            style={{
+              width: "100px",
+              marginRight: "15px",
+              fontSize: "15px",
+              padding: 0,
+              marginTop: 10,
+            }}
+          >
+            {ORDER_STATUS.map((option) => (
+              <MenuItem key={option.id} value={option.id}>
+                {option.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+
+        {!props.readonly && (
+          <TextField
+            select
+            size="small"
+            label="Courier"
+            value={courierFilter}
+            // onChange={(e) => {if(e.target.value=='all') setCourierFilter(null); else{setCourierFilter(e.target.value);}}}
+            onChange={(e) => setCourierFilter(e.target.value)}
+            variant="outlined"
+            style={{
+              width: "100px",
+              marginRight: "15px",
+              fontSize: "15px",
+              padding: 0,
+              marginTop: 10,
+            }}
+          >
+            <MenuItem key={'475rh73'} value="All">All</MenuItem>
+
+            {courier?.map((option) => (
+              <MenuItem key={option._id} value={option._id}>
+                {option.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+
+        {!props.readonly && (
+          <Autocomplete
+            open={openSalesAuto}
+            onOpen={() => {
+              setOpenSalesAuto(true);
+            }}
+            onClose={() => {
+              setOpenSalesAuto(false);
+            }}
+            size="small"
+            onChange={(event, value) => setSalesAccFilter(value)}
+            value={salesAccFilter}
+            disabled={props.adminRole !== "admin" && !salesAdmin?.viewAllOrders}
+            getOptionSelected={(option, value) => option._id === value._id}
+            getOptionLabel={(option) => option.name}
+            options={salesAccOptions}
+            loading={salesAccOptionsLoading}
+            style={{
+              marginRight: "15px",
+              fontSize: "15px",
+              width: 160,
+              padding: 0,
+              marginTop: 10,
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                required
+                label="Account"
+                variant="outlined"
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <Fragment>
+                      {salesAccOptionsLoading ? (
+                        <CircularProgress color="inherit" size={20} />
+                      ) : null}
+                      {params.InputProps.endAdornment}
+                    </Fragment>
+                  ),
+                }}
+              />
+            )}
+          />
+        )}
+      </div>
+      <br />
+      <Paper className={classes.root}>
+        {spinner && <LinearProgress />}
+        <TableContainer className={classes.container}>
+          <Table stickyHeader>
+            <TableHead>
+              <TableRow>
+                {columns.map((column) => (
+                  <TableCell
+                    key={column.id}
+                    style={{
+                      backgroundColor: "#EEEEEE",
+                      color: "#151515",
+                      fontSize: "14px",
+                    }}
+                  >
+                    {column.label}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows
+                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                .map((row, index) => {
+                  return (
+                    <TableRow hover tabIndex={-1} key={index}>
+                      {columns.map((column, index) => {
+                        const value = row[column.id];
+                        return (
+                          <TableCell
+                            key={index}
+                            align={column.align}
+                            padding="none"
+                          >
+                            <div style={{ padding: "5px 0px", marginLeft: 5 }}>
+                              {column.format && typeof value === "number"
+                                ? column.format(value)
+                                : value}
+                            </div>
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        {!props.readonly && (
+          <TablePagination
+            rowsPerPageOptions={[20, 30, 50, 100, 1000]}
+            component="div"
+            count={rows.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onChangePage={handleChangePage}
+            onChangeRowsPerPage={handleChangeRowsPerPage}
+          />
+        )}
+      </Paper>
+
+      {updateModal && (
+        <UpdateOrder
+          modal={updateModal}
+          modalHandler={updateHandler}
+          onUpdate={onOrderUpdateSuccess}
+          order_id={orderId}
+          token={props.token}
+          index={order.key}
+        />
+      )}
+
+
+{EditOrderModal && (
+        <EditOrderInfo
+          modal={EditOrderModal}
+          modalHandler={EditOrderHandler}
+          onUpdate={onOrderUpdateSuccess}
+          order_id={orderId}
+          token={props.token}
+          index={order.key}
+        />
+      )}
+
+      {callHandler && (
+        <CallOrder
+          modal={callModal}
+          modalHandler={callHandler}
+          onUpdate={onOrderUpdateSuccess}
+          token={props.token}
+          data={order}
+          order_id={orderId}
+          index={order.key}
+        />
+      )}
+
+      {detailsModal && (
+        <DetailsOrder
+          modal={detailsModal}
+          modalHandler={detailsHandler}
+          order={order}
+          token={props.token}
+        />
+      )}
+
+      <Invoice ref={invoiceComponentRef} token={props.token} data={order} />
+      <SnackBar
+        open={snackbar.open}
+        message={snackbar.message}
+        severity={snackbar.severity}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      />
+
+      {/*Redx Login Modal */}
+      <Modal
+        isOpen={redxModel}
+        toggle={() => setRedxModel(false)}
+        className=""
+        size="md"
+        style={{ top: "50px", left: "40px" }}
+      >
+        <ModalHeader
+          style={{
+            backgroundColor: "#007bfc",
+            fontSize: "20px",
+            color: "white",
+          }}
+        >
+          {modalMessage}
+        </ModalHeader>
+        <ModalBody>
+          <TextField
+            id="outlined-basic"
+            label="Enter OTP"
+            fullWidth
+            variant="outlined"
+            value={redxOtp}
+            onChange={(e) => setRedxOtp(e.target.value)}
+          />
+        </ModalBody>
+        <ModalFooter>
+          <Button color="primary" variant="outlined" onClick={handleRedxOtp}>
+            Ok
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+{/* Steadfast Model */}
+<Modal
+  isOpen={steadfastModel}
+  toggle={() => setSteadfastModel(false)}
+  className=""
+  size="md"
+  style={{ top: "50px", left: "40px" }}
+>
+  <ModalHeader
+    style={{
+      backgroundColor: "#007bfc",
+      fontSize: "20px",
+      color: "white",
+    }}
+  >
+    {modalMessage}
+  </ModalHeader>
+  <ModalBody>
+    {/* Add your content here */}
+  </ModalBody>
+  <ModalFooter>
+    {/* <Button
+      color="primary"
+      variant="outlined"
+      onClick={() => handleAddParcel(selectedInvoiceId)} // Call the add parcel function on button click
+    >
+      Add Parcel
+    </Button> */}
+
+
+    <Button
+  onClick={() => handleAddParcel(data.order_id)} // Pass the specific order ID
+  style={{ backgroundColor: "#4071CA", color: "white" }}
+  className={classes.tableActionButton}
+>
+  Add Parcel
+</Button>
+
+
+    <Button
+      color="primary"
+      variant="outlined"
+      onClick={SteadfastHandleClose}
+    >
+      Close
+    </Button>
+  </ModalFooter>
+</Modal>
+
+
+      <ToastContainer autoClose={8000} />
+    </Container>
+  );
+};
+
+const mapStateToProps = (state) => {
+  return {
+    token: state.auth.token,
+    adminRole: state.auth.adminRole,
+    admin: state.auth.adminData,
+  };
+};
+export default connect(mapStateToProps)(OrderTable);
