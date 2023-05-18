@@ -164,6 +164,9 @@ const statusStyle = (status) => {
     case 6:
       color = "red";
       break;
+      case 7:
+        color = "yellow";
+        break;
     default:
       break;
   }
@@ -475,55 +478,12 @@ const OrderTable = (props) => {
       });
   };
   
-  
-  const handleTrackParcel = (orderId) => {
-    // Make the API call to add the parcel using the order ID
-    axios
-      .post(
-        process.env.REACT_APP_BASE_URL + "admin_api/steadfast/addparcel",
-        { order_id: orderId },
-        {
-          headers: headers,
-        }
-      )
-      .then((res) => {
-        toast.success(res.data.message, {
-          position: toast.POSITION.TOP_RIGHT,
-        });
-      })
-      .catch((err) => {
-        toast.error(err.response.data.message, {
-          position: toast.POSITION.TOP_RIGHT,
-        });
-      });
-  };
 
-  // Define a new function to handle the "Add Parcel" button click
-  // const handleAddParcel = (invoiceId) => {
-  //   // Make the API call to add the parcel using the invoice ID
-  //   axios
-  //     .post(
-  //       process.env.REACT_APP_BASE_URL + "admin_api/steadfast/addparcel",
-  //       { order_id: invoiceId },
-  //       {
-  //         headers: headers,
-  //       }
-  //     )
-  //     .then((res) => {
-  //       // Check if the API call was successful
-  //       if (res.status === 200) {
-  //         // Handle the successful response
-  //         console.log(res.data); // Modify this to handle the response as needed
-  //       } else {
-  //         // Handle other response statuses if necessary
-  //         console.error("Failed to add parcel:", res.data.message);
-  //       }
-  //     })
-  //     .catch((err) => {
-  //       // Handle errors
-  //       console.error("Error adding parcel:", err.message);
-  //     });
-  // };
+  const trackParcel = (trackingId) => {
+    history.push(`/steadfast/track-parcel/${trackingId}`);
+  }
+  
+  
   
 
 
@@ -972,48 +932,55 @@ const OrderTable = (props) => {
 
         </ButtonGroup>
 
-        <ButtonGroup
-          style={{ width: "100%" }}
-          variant="contained"
-          disableElevation
-          color="primary"
-        >
-
         {steadfastAlive.length !== 0 && (
-            <div>
-              {adminRole === "admin" ? (
-
-                <Button
+  <div style={{ border: "1px solid green" , borderRadius: "3px"}}>
+    <h6 style={{ 
+          marginBottom: "3px", 
+          border: "1px solid green" ,
+          backgroundColor: "rgb(165, 166, 161)", 
+          color: "#fff",
+          padding: "5px"
+    }}>
+      SteadFast Courier
+    </h6>
+    <ButtonGroup
+      style={{ width: "100%" }}
+      variant="contained"
+      disableElevation
+      color="primary"
+    >
+      <div>
+        {adminRole === "admin" ? (
+          <Button
             onClick={() => handleAddParcel(data.order_id)} // Pass the specific order ID
+            style={{ backgroundColor: "#1dc68c", color: "white" }}
+            className={classes.tableAction}
+          >
+            Booking
+          </Button>
+        ) : (
+          <Button
+            //onClick={() => handleRedxWithoutAdmin(data.receiver_phone)}
             style={{ backgroundColor: "#4071CA", color: "white" }}
             className={classes.tableAction}
           >
-            AddParcel
+            Steadfast
           </Button>
-
-              ) : (
-                <Button
-                  //onClick={() => handleRedxWithoutAdmin(data.receiver_phone)}
-                  style={{ backgroundColor: "#4071CA", color: "white" }}
-                  className={classes.tableAction}
-                >
-                  Steadfast
-                </Button>
-              )}
-
+        )}
 
         <Button
-            onClick={() => handleTrackParcel(data.order_id)} // Pass the specific order ID
-            style={{ backgroundColor: "#4071CA", color: "white" }}
-            className={classes.tableAction}
-          >
-            TrackParcel
-          </Button>
+          onClick={() => trackParcel(data.tracking_id)} // Pass the specific order ID
+          style={{ backgroundColor: "#bb9521", color: "white" }}
+          className={classes.tableAction}
+        >
+          Track
+        </Button>
+      </div>
+    </ButtonGroup>
+  </div>
+)}
 
-            </div>
-          )}
 
-        </ButtonGroup>
 
 
       </div>
