@@ -449,7 +449,7 @@ const OrderTable = (props) => {
 
 
   const handleSteadfast = (data) => {
-    //setSelectedInvoiceId(data.invoice_id);
+    setSelectedInvoiceId(data.invoice_id);
     setSteadfastModel(true);
   };
 
@@ -476,6 +476,27 @@ const OrderTable = (props) => {
   };
   
   
+  const handleTrackParcel = (orderId) => {
+    // Make the API call to add the parcel using the order ID
+    axios
+      .post(
+        process.env.REACT_APP_BASE_URL + "admin_api/steadfast/addparcel",
+        { order_id: orderId },
+        {
+          headers: headers,
+        }
+      )
+      .then((res) => {
+        toast.success(res.data.message, {
+          position: toast.POSITION.TOP_RIGHT,
+        });
+      })
+      .catch((err) => {
+        toast.error(err.response.data.message, {
+          position: toast.POSITION.TOP_RIGHT,
+        });
+      });
+  };
 
   // Define a new function to handle the "Add Parcel" button click
   // const handleAddParcel = (invoiceId) => {
@@ -947,33 +968,48 @@ const OrderTable = (props) => {
             </div>
           )}
 
-{steadfastAlive.length !== 0 && (
+
+
+        </ButtonGroup>
+
+        <ButtonGroup
+          style={{ width: "100%" }}
+          variant="contained"
+          disableElevation
+          color="primary"
+        >
+
+        {steadfastAlive.length !== 0 && (
             <div>
               {adminRole === "admin" ? (
-                // <Button
-                //   onClick={() => handleSteadfast(data.receiver_phone)}
-                //   style={{ backgroundColor: "#4071CA", color: "white" }}
-                //   className={classes.tableAction}
-                // >
-                //   Steadfast
-                // </Button>
+
                 <Button
-  onClick={() => handleAddParcel(data.order_id)} // Pass the specific order ID
-  style={{ backgroundColor: "#4071CA", color: "white" }}
-  className={classes.tableActionButton}
->
-  Add Parcel
-</Button>
+            onClick={() => handleAddParcel(data.order_id)} // Pass the specific order ID
+            style={{ backgroundColor: "#4071CA", color: "white" }}
+            className={classes.tableAction}
+          >
+            AddParcel
+          </Button>
 
               ) : (
                 <Button
-                  onClick={() => handleRedxWithoutAdmin(data.receiver_phone)}
+                  //onClick={() => handleRedxWithoutAdmin(data.receiver_phone)}
                   style={{ backgroundColor: "#4071CA", color: "white" }}
-                  className={classes.tableActionButton}
+                  className={classes.tableAction}
                 >
                   Steadfast
                 </Button>
               )}
+
+
+        <Button
+            onClick={() => handleTrackParcel(data.order_id)} // Pass the specific order ID
+            style={{ backgroundColor: "#4071CA", color: "white" }}
+            className={classes.tableAction}
+          >
+            TrackParcel
+          </Button>
+
             </div>
           )}
 
@@ -1441,24 +1477,13 @@ const OrderTable = (props) => {
     {/* Add your content here */}
   </ModalBody>
   <ModalFooter>
-    {/* <Button
+    <Button
       color="primary"
       variant="outlined"
       onClick={() => handleAddParcel(selectedInvoiceId)} // Call the add parcel function on button click
     >
       Add Parcel
-    </Button> */}
-
-
-    <Button
-  onClick={() => handleAddParcel(data.order_id)} // Pass the specific order ID
-  style={{ backgroundColor: "#4071CA", color: "white" }}
-  className={classes.tableActionButton}
->
-  Add Parcel
-</Button>
-
-
+    </Button>
     <Button
       color="primary"
       variant="outlined"
